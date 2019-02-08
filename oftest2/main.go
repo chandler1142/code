@@ -69,7 +69,7 @@ func handleRead(conn net.Conn) {
 		if strings.Contains(receiveStr, "mechanisms") {
 			//没有TLS，直接回复AUTH
 			newStream := `
-				  <auth mechanism="PLAIN" xmlns="urn:ietf:params:xml:ns:xmpp-sasl">AHRlc3QAMTIzMTIz</auth>
+				  <auth mechanism="PLAIN" xmlns="urn:ietf:params:xml:ns:xmpp-sasl"/>
 			`
 			handleWrite(conn, newStream)
 		}
