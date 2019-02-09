@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bitly/go-simplejson"
 	"github.com/tealeg/xlsx"
 	"io/ioutil"
 	"net/http"
@@ -28,7 +29,14 @@ const (
 	mgtvPlayTimes         string = "https://vc.mgtv.com/v2/dynamicinfo?_support=10000000&cid=326647&_=%s"
 	mgtvPlayTimesBySeries string = "https://pcweb.api.mgtv.com/episode/list?video_id=4619079&page=%d&size=25&cxid=&version=5.5.35&_support=10000000&_=%s"
 
-	iqiyiScore string = "http://www.iqiyi.com/a_19rrh51i8p.html?vfm=2008_aldbd"
+	iqiyiScore     string = "http://pcw-api.iqiyi.com/video/score/getsnsscore?qipu_ids=230419701&tvid=230419701&pageNo=1"
+	iqiyiPlayTimes string = "https://pcw-api.iqiyi.com/video/video/hotplaytimes/230419701"
+
+	tencentScore string = "https://v.qq.com/x/cover/to61xna5r970zmo/e0027wpnpye.html"
+	tencentRank  string = "https://v.qq.com/x/hotlist/search/?channel=106"
+
+	pptvScore             string = "http://v.pptv.com/page/JWdQzjacDEqtK5M.html?spm=v_show_web.0.1.3.1.3.1.3.2.1"
+	pptvPlayTimesBySeries string = "http://v.pptv.com/show/JWdQzjacDEqtK5M.html?spm=pc_top_web.0.1.2.0.2.2.0.7.1.0"
 
 	sheetNameOne   string = "新媒体播放数据对比增幅"
 	sheetNameTwo   string = "芒果分集播放量"
@@ -53,13 +61,58 @@ func GetBetweenStr(str, start, end string) string {
 	return str
 }
 
-var fillSeq = [5]string{"iqiyi", "tecent", "mgtv", "pptv", "youku"}
+var fillSeq = [5]string{"iqiyi", "tencent", "mgtv", "pptv", "youku"}
 var dataSeq = make(map[string]Collector)
 
 func main() {
 	mgtv := getMGTVData()
+	iqiyi := getIQiyiData()
+	tencent := getTencentData()
+	pptv := getPPTVData()
 	dataSeq["mgtv"] = *mgtv
+	dataSeq["iqiyi"] = *iqiyi
+	dataSeq["tencent"] = *tencent
+	dataSeq["pptv"] = *pptv
+
 	fillExcel()
+}
+
+func fillSheetOneData(platform string, row *xlsx.Row, startIndex int) {
+	if startIndex < 0 {
+		panic("Please check current date column exists in sheet one")
+	}
+	cells := row.Cells
+	fmt.Printf("IQIYI data as below: \n times: %s \n score: %s \n rank: %s\n serial: %s\n", dataSeq[platform].playTimes, dataSeq[platform].score, dataSeq[platform].rank, dataSeq[platform].seriesTimes)
+	cells[startIndex].Value = dataSeq[platform].playTimes
+	cells[startIndex+1].Value = dataSeq[platform].score
+	cells[startIndex+2].Value = dataSeq[platform].rank
+}
+
+func fillSheetsData(platform string, sheet *xlsx.Sheet) {
+	startIndex := -1
+	for rowIndex, row := range sheet.Rows {
+		if rowIndex > 53 {
+			break
+		}
+		if rowIndex == 1 {
+			startIndex = getStartIndexByMatchDate(row)
+			if startIndex < 0 {
+				panic("Please check current date column exists in sheet two: " + platform)
+			}
+		} else if rowIndex > 1 {
+			//第一列的值正好是第几集，1，2，3
+			value, err := strconv.ParseFloat(dataSeq[platform].seriesTimes[row.Cells[0].Value], 64)
+			if err != nil {
+				fmt.Println("Format float err when parse " + platform + " on sheet two")
+			}
+			if startIndex > len(row.Cells)-1 {
+				for i := 0; startIndex >= len(row.Cells)-1; i++ {
+					row.AddCell()
+				}
+			}
+			row.Cells[startIndex].SetFloat(value)
+		}
+	}
 }
 
 func fillExcel() {
@@ -72,7 +125,6 @@ func fillExcel() {
 	if err != nil {
 		fmt.Printf("open failed: %s\n", err)
 	}
-
 	for _, sheet := range xlFile.Sheets {
 		fmt.Printf("\n=================== Start to process %s ========================== \n", sheet.Name)
 		if strings.EqualFold(sheet.Name, sheetNameOne) {
@@ -84,42 +136,27 @@ func fillExcel() {
 				}
 				if rowIndex == 3 {
 					//填充爱奇艺的数据
+					fillSheetOneData("iqiyi", row, startIndex)
+				}
+				if rowIndex == 4 {
+					//填充腾讯的数据
+					fillSheetOneData("tencent", row, startIndex)
 				}
 				if rowIndex == 5 {
 					//填充芒果TV的数据
-					cells := row.Cells
-					//fmt.Printf("startIndex: %d \n", startIndex)
-					fmt.Printf("MGTV data as below: \n times: %s \n score: %s \n rank: %s\n serial: %s\n", dataSeq["mgtv"].playTimes, dataSeq["mgtv"].score, dataSeq["mgtv"].rank, dataSeq["mgtv"].seriesTimes)
-					cells[startIndex].Value = dataSeq["mgtv"].playTimes
-					cells[startIndex+1].Value = dataSeq["mgtv"].score
-					cells[startIndex+2].Value = dataSeq["mgtv"].rank
+					fillSheetOneData("mgtv", row, startIndex)
+				}
+				if rowIndex == 6 {
+					//填充PPTV的数据
+					fillSheetOneData("pptv", row, startIndex)
 				}
 			}
-
 		}
-
 		if strings.EqualFold(sheet.Name, sheetNameTwo) {
-			startIndex := -1
-			for rowIndex, row := range sheet.Rows {
-				if rowIndex > 53 {
-					break
-				}
-				if rowIndex == 1 {
-					startIndex = getStartIndexByMatchDate(row)
-				} else if rowIndex > 1 {
-					//第一列的值正好是第几集，1，2，3
-					value, err := strconv.ParseFloat(dataSeq["mgtv"].seriesTimes[row.Cells[0].Value], 64)
-					if err != nil {
-						fmt.Println("Format float err when parse MGTV on sheet two")
-					}
-					if startIndex > len(row.Cells)-1 {
-						for i := 0; startIndex >= len(row.Cells)-1; i++ {
-							row.AddCell()
-						}
-					}
-					row.Cells[startIndex].SetFloat(value)
-				}
-			}
+			fillSheetsData("mgtv", sheet)
+		}
+		if strings.EqualFold(sheet.Name, sheetNameThree) {
+			fillSheetsData("pptv", sheet)
 		}
 	}
 	xlFile.Save(path)
@@ -129,7 +166,7 @@ func getStartIndexByMatchDate(row *xlsx.Row) int {
 	var startIndex = -1
 	for j, cell := range row.Cells {
 		if j == 0 {
-			fmt.Printf("\n")
+			//fmt.Printf("\n")
 		}
 		switch cell.Type() {
 		case xlsx.CellTypeNumeric:
@@ -176,6 +213,106 @@ type MgtvPlaySerialDataElement struct {
 	Count string `json:"playcnt"`
 }
 
+type PPTVSeries struct {
+	PlayList PPTVSeriesPlayList `json:"playList"`
+}
+
+type PPTVSeriesPlayList struct {
+	PlayListData []PPTVPlayListDataElement `json:"data>list"`
+}
+
+type PPTVPlayListDataElement struct {
+	PV   string `json:"pv"`
+	Rank int    `json:"rank"`
+}
+
+func getPPTVData() *Collector {
+	c := new(Collector)
+
+	c.platform = "pptv"
+	//获取评分
+	resp, _ := http.Get(pptvScore)
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	pat := "<b class=\"score\">[0-9]+\\.?[0-9]*</b>"
+	reg, _ := regexp.Compile(pat)
+	span := reg.Find(body)
+	c.score = GetBetweenStr(string(span), ">", "<")
+	fmt.Println("Get PPTV Score: " + c.score)
+
+	//获取播放
+	pat = "<li>播放：[0-9]+\\.?[0-9]*万"
+	reg, _ = regexp.Compile(pat)
+	span = reg.Find(body)
+	tmp := GetBetweenStr(string(span), "<li>播放：", "万")
+	c.playTimes = strings.Split(tmp, "：")[1]
+
+	resp, _ = http.Get(pptvPlayTimesBySeries)
+	body, _ = ioutil.ReadAll(resp.Body)
+	jsonStr := GetBetweenStr(string(body), "var webcfg =", "\n")
+	jsonStr = GetBetweenStr(jsonStr, "=", ";")
+
+	//fmt.Println(jsonStr)
+	res, err := simplejson.NewJson([]byte(jsonStr))
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		panic(err)
+	}
+	rows, err := res.Get("playList").Get("data").Get("list").Array()
+	c.seriesTimes = make(map[string]string)
+	for _, row := range rows {
+		if each_map, ok := row.(map[string]interface{}); ok {
+			if rank, ok := each_map["rank"].(json.Number); ok {
+				rank_int, err := strconv.ParseInt(string(rank), 10, 0)
+				rank_int = rank_int + 1
+				if err != nil {
+					panic(err)
+				}
+				c.seriesTimes[strconv.FormatInt(rank_int, 10)] = strings.Split(each_map["pv"].(string), "万")[0]
+			}
+		}
+	}
+
+	return c
+}
+
+func getTencentData() *Collector {
+	c := new(Collector)
+
+	c.platform = "tencent"
+	//获取评分
+	resp, _ := http.Get(tencentScore)
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	pat := "\"score\":\"[0-9]+\\.?[0-9]*"
+	reg, _ := regexp.Compile(pat)
+	span := reg.Find(body)
+	c.score = strings.Split(string(span), "\":\"")[1]
+	fmt.Println("Get Tencent Score: " + c.score)
+
+	//获取播放次数
+	pat = "<em id=\"mod_cover_playnum\" class=\"num\">[0-9]+\\.?[0-9]*亿</em>"
+	reg, _ = regexp.Compile(pat)
+	span = reg.Find(body)
+	c.playTimes = GetBetweenStr(string(span), ">", "亿</em>")
+	fmt.Println("Get Tencent PlayTimes: " + c.playTimes)
+
+	//获取排名
+	//resp, _ = http.Get(tencentRank)
+	//body, _ = ioutil.ReadAll(resp.Body)
+	//pat = "item_a\">\\S+title=\"宇宙护卫队\""
+	//reg, _ = regexp.Compile(pat)
+	//bodyStr := strings.TrimSpace(string(body))
+	//bodyStr = strings.Trim(bodyStr,"\r")
+	//bodyStr = strings.Trim(bodyStr,"\n")
+	//
+	//span = reg.Find([]byte(bodyStr))
+	//c.rank = strings.Split(string(span),"\":\"")[1]
+	//fmt.Println("Get Tencent rank: " + c.score)
+
+	return c
+}
+
 func getMGTVData() *Collector {
 	c := new(Collector)
 
@@ -185,7 +322,7 @@ func getMGTVData() *Collector {
 	resp, _ := http.Get(mgtvScore)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
-	pat := "<span class=\"score\">[0-9]+\\.[0-9]+</span>"
+	pat := "<span class=\"score\">[0-9]+\\.?[0-9]*</span>"
 	reg, _ := regexp.Compile(pat)
 	span := reg.Find(body)
 	c.score = GetBetweenStr(string(span), ">", "<")
@@ -242,6 +379,51 @@ func getMGTVData() *Collector {
 			c.seriesTimes[element.T1] = strings.Split(element.Count, "万")[0]
 		}
 	}
+
+	return c
+}
+
+type IQiyiScore struct {
+	Data []IQiyiScoreData `json:"data"`
+}
+
+type IQiyiScoreData struct {
+	ID    int64   `json:"qipu_id"`
+	Score float64 `json:"sns_score"`
+}
+
+type IQiyiPlayTimes struct {
+	Data []IQiyiPlayTimesData `json:"data"`
+}
+
+type IQiyiPlayTimesData struct {
+	Hot int `json:"hot"`
+}
+
+func getIQiyiData() *Collector {
+	c := new(Collector)
+	c.platform = "iqiyi"
+
+	//获取评分
+	resp, _ := http.Get(iqiyiScore)
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	var iqiyiScore IQiyiScore
+	if err := json.Unmarshal(body, &iqiyiScore); err != nil {
+		fmt.Println("================IQiyiScore json str 转struct==")
+		fmt.Println(err)
+	}
+	c.score = strconv.FormatFloat(iqiyiScore.Data[0].Score, 'f', 1, 64)
+
+	//获取热度
+	resp, _ = http.Get(iqiyiPlayTimes)
+	body, _ = ioutil.ReadAll(resp.Body)
+	var iqiyiPlayTimes IQiyiPlayTimes
+	if err := json.Unmarshal(body, &iqiyiPlayTimes); err != nil {
+		fmt.Println("================IQiyiPlayTimes json str 转struct==")
+		fmt.Println(err)
+	}
+	c.playTimes = strconv.Itoa(iqiyiPlayTimes.Data[0].Hot)
 
 	return c
 }
