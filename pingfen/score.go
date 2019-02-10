@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/bitly/go-simplejson"
 	"github.com/tealeg/xlsx"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,21 +34,26 @@ const (
 
 	iqiyiScore     string = "http://pcw-api.iqiyi.com/video/score/getsnsscore?qipu_ids=230419701&tvid=230419701&pageNo=1"
 	iqiyiPlayTimes string = "https://pcw-api.iqiyi.com/video/video/hotplaytimes/230419701"
+	iqiyiRank string = "http://top.iqiyi.com/shaoer.html"
 
 	tencentScore string = "https://v.qq.com/x/cover/to61xna5r970zmo/e0027wpnpye.html"
 	tencentRank  string = "https://v.qq.com/x/hotlist/search/?channel=106"
 
 	pptvScore             string = "http://v.pptv.com/page/JWdQzjacDEqtK5M.html?spm=v_show_web.0.1.3.1.3.1.3.2.1"
+	pptvRank              string = "http://top.pptv.com/kid?fb=1"
 	pptvPlayTimesBySeries string = "http://v.pptv.com/show/JWdQzjacDEqtK5M.html?spm=pc_top_web.0.1.2.0.2.2.0.7.1.0"
 
 	sheetNameOne   string = "新媒体播放数据对比增幅"
 	sheetNameTwo   string = "芒果分集播放量"
 	sheetNameThree string = "PP分集播放量"
-
-	path string = "pingfen/collect.xlsx"
+	sheetNameFour  string = "优酷分集播放量"
 )
 
-var currentDate = time.Now().Format("2006-01-02 00:00:00")
+var (
+	h           bool
+	p           string
+	currentDate = time.Now().Format("2006-01-02 00:00:00")
+)
 
 func GetBetweenStr(str, start, end string) string {
 	n := strings.Index(str, start)
@@ -64,7 +72,29 @@ func GetBetweenStr(str, start, end string) string {
 var fillSeq = [5]string{"iqiyi", "tencent", "mgtv", "pptv", "youku"}
 var dataSeq = make(map[string]Collector)
 
+func init() {
+	flag.BoolVar(&h, "h", false, "this help")
+	flag.StringVar(&p, "p", "collect.xlsx", "设置excel文件的路径")
+	flag.Usage = usage
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, `
+Usage: fetch [excel]
+
+Options:
+`)
+	flag.PrintDefaults()
+}
+
 func main() {
+	flag.Parse()
+
+	if h {
+		flag.Usage()
+		return
+	}
+
 	mgtv := getMGTVData()
 	iqiyi := getIQiyiData()
 	tencent := getTencentData()
@@ -82,7 +112,9 @@ func fillSheetOneData(platform string, row *xlsx.Row, startIndex int) {
 		panic("Please check current date column exists in sheet one")
 	}
 	cells := row.Cells
-	fmt.Printf("IQIYI data as below: \n times: %s \n score: %s \n rank: %s\n serial: %s\n", dataSeq[platform].playTimes, dataSeq[platform].score, dataSeq[platform].rank, dataSeq[platform].seriesTimes)
+	fmt.Printf("%s data as below: \n times: %s \n score: %s \n rank: %s\n serial: %s\n", platform, dataSeq[platform].playTimes, dataSeq[platform].score, dataSeq[platform].rank, dataSeq[platform].seriesTimes)
+	style := cells[startIndex].GetStyle()
+	style.Font.Size = 9
 	cells[startIndex].Value = dataSeq[platform].playTimes
 	cells[startIndex+1].Value = dataSeq[platform].score
 	cells[startIndex+2].Value = dataSeq[platform].rank
@@ -97,9 +129,9 @@ func fillSheetsData(platform string, sheet *xlsx.Sheet) {
 		if rowIndex == 1 {
 			startIndex = getStartIndexByMatchDate(row)
 			if startIndex < 0 {
-				panic("Please check current date column exists in sheet two: " + platform)
+				fmt.Println("Please check current date column exists in sheet two: " + platform)
 			}
-		} else if rowIndex > 1 {
+		} else if rowIndex > 1 && startIndex > 0 {
 			//第一列的值正好是第几集，1，2，3
 			value, err := strconv.ParseFloat(dataSeq[platform].seriesTimes[row.Cells[0].Value], 64)
 			if err != nil {
@@ -116,8 +148,7 @@ func fillSheetsData(platform string, sheet *xlsx.Sheet) {
 }
 
 func fillExcel() {
-	excelName := path
-	xlFile, err := xlsx.OpenFile(excelName)
+	xlFile, err := xlsx.OpenFile(p)
 	if xlFile == nil {
 		fmt.Println("No such excel file named collect.xlsx")
 		return
@@ -129,6 +160,7 @@ func fillExcel() {
 		fmt.Printf("\n=================== Start to process %s ========================== \n", sheet.Name)
 		if strings.EqualFold(sheet.Name, sheetNameOne) {
 			startIndex := -1
+			iqiyiStartIndex := -1
 			for rowIndex, row := range sheet.Rows {
 				if rowIndex == 1 {
 					//获取填充的列位置
@@ -150,6 +182,32 @@ func fillExcel() {
 					//填充PPTV的数据
 					fillSheetOneData("pptv", row, startIndex)
 				}
+				if rowIndex == 11 {
+					//获取爱奇艺趋势图位置
+					for j, cell := range row.Cells {
+						if j == 0 {
+							continue
+						}
+						switch cell.Type() {
+						case xlsx.CellTypeNumeric:
+							t, _ := cell.GetTime(false)
+							tstr := t.Format("2006-01-02 00:00:00")
+							if strings.EqualFold(tstr, currentDate) {
+								iqiyiStartIndex = j
+							}
+						}
+					}
+					if iqiyiStartIndex < 0 {
+						panic("爱奇异趋势图的当前日期不存在")
+					}
+				}
+				if rowIndex == 12 {
+					cells := row.Cells
+					style := cells[iqiyiStartIndex].GetStyle()
+					style.Font.Size = 9
+					cells[iqiyiStartIndex].Value = dataSeq["iqiyi"].playTimes
+
+				}
 			}
 		}
 		if strings.EqualFold(sheet.Name, sheetNameTwo) {
@@ -158,8 +216,11 @@ func fillExcel() {
 		if strings.EqualFold(sheet.Name, sheetNameThree) {
 			fillSheetsData("pptv", sheet)
 		}
+		if strings.EqualFold(sheet.Name, sheetNameFour) {
+			fillSheetsData("youku", sheet)
+		}
 	}
-	xlFile.Save(path)
+	xlFile.Save(p)
 }
 
 func getStartIndexByMatchDate(row *xlsx.Row) int {
@@ -213,23 +274,24 @@ type MgtvPlaySerialDataElement struct {
 	Count string `json:"playcnt"`
 }
 
-type PPTVSeries struct {
-	PlayList PPTVSeriesPlayList `json:"playList"`
-}
-
-type PPTVSeriesPlayList struct {
-	PlayListData []PPTVPlayListDataElement `json:"data>list"`
-}
-
-type PPTVPlayListDataElement struct {
-	PV   string `json:"pv"`
-	Rank int    `json:"rank"`
-}
-
 func getPPTVData() *Collector {
 	c := new(Collector)
 
 	c.platform = "pptv"
+	//获取排名
+	doc, err := goquery.NewDocument(pptvRank)
+	doc.Find("body").Find("ul.cf").Find("li").Each(func(i int, selection *goquery.Selection) {
+		s := selection.Find("a[title=\"宇宙护卫队\"]")
+		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
+			span := selection.Find("span")
+			rank, err := strconv.ParseInt(span.Text(), 10, 64)
+			if err != nil {
+				fmt.Println("[Error]Get PPTV Rank fail")
+			}
+			c.rank = strconv.Itoa(int(rank))
+		}
+	})
+
 	//获取评分
 	resp, _ := http.Get(pptvScore)
 	defer resp.Body.Close()
@@ -290,25 +352,28 @@ func getTencentData() *Collector {
 	c.score = strings.Split(string(span), "\":\"")[1]
 	fmt.Println("Get Tencent Score: " + c.score)
 
+	//获取排名
+	doc, err := goquery.NewDocument(tencentRank)
+	doc.Find("body").Find("ul.table_list._cont").Find("li").Each(func(i int, selection *goquery.Selection) {
+		s := selection.Find("a[title=\"宇宙护卫队\"]")
+		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
+			span := selection.Find("span")
+			c.rank = span.Text()
+		}
+	})
 	//获取播放次数
 	pat = "<em id=\"mod_cover_playnum\" class=\"num\">[0-9]+\\.?[0-9]*亿</em>"
 	reg, _ = regexp.Compile(pat)
 	span = reg.Find(body)
-	c.playTimes = GetBetweenStr(string(span), ">", "亿</em>")
+	tmp := GetBetweenStr(string(span), ">", "亿</em>")
+	tmpFloat, err := strconv.ParseFloat(tmp, 64)
+	if err != nil {
+		fmt.Println("Tencent Playtime format err: ")
+		panic(err)
+	}
+	tmpInt := tmpFloat * 10000
+	c.playTimes = strconv.Itoa(int(tmpInt))
 	fmt.Println("Get Tencent PlayTimes: " + c.playTimes)
-
-	//获取排名
-	//resp, _ = http.Get(tencentRank)
-	//body, _ = ioutil.ReadAll(resp.Body)
-	//pat = "item_a\">\\S+title=\"宇宙护卫队\""
-	//reg, _ = regexp.Compile(pat)
-	//bodyStr := strings.TrimSpace(string(body))
-	//bodyStr = strings.Trim(bodyStr,"\r")
-	//bodyStr = strings.Trim(bodyStr,"\n")
-	//
-	//span = reg.Find([]byte(bodyStr))
-	//c.rank = strings.Split(string(span),"\":\"")[1]
-	//fmt.Println("Get Tencent rank: " + c.score)
 
 	return c
 }
@@ -404,6 +469,18 @@ func getIQiyiData() *Collector {
 	c := new(Collector)
 	c.platform = "iqiyi"
 
+	//获取排名
+	doc, err := goquery.NewDocument(iqiyiRank)
+	doc.Find("body").Find("ul.topDetails-list").Find("li").Each(func(i int, selection *goquery.Selection) {
+		s := selection.Find("a[title=\"宇宙护卫队\"]")
+		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
+			span := selection.Find("i.array")
+			if err != nil {
+				fmt.Println("[Error]Get IQIYI Rank fail")
+			}
+			c.rank = span.Text()
+		}
+	})
 	//获取评分
 	resp, _ := http.Get(iqiyiScore)
 	defer resp.Body.Close()
