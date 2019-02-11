@@ -69,7 +69,6 @@ func GetBetweenStr(str, start, end string) string {
 	return str
 }
 
-var fillSeq = [5]string{"iqiyi", "tencent", "mgtv", "pptv", "youku"}
 var dataSeq = make(map[string]Collector)
 
 func init() {
@@ -80,7 +79,7 @@ func init() {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `
-Usage: fetch [excel]
+Usage: [command] [excel path]
 
 Options:
 `)
@@ -129,7 +128,7 @@ func fillSheetsData(platform string, sheet *xlsx.Sheet) {
 		if rowIndex == 1 {
 			startIndex = getStartIndexByMatchDate(row)
 			if startIndex < 0 {
-				fmt.Println("Please check current date column exists in sheet two: " + platform)
+				fmt.Println("[WARN]Please check current date column exists in sheet two: " + platform)
 			}
 		} else if rowIndex > 1 && startIndex > 0 {
 			//第一列的值正好是第几集，1，2，3
@@ -197,16 +196,16 @@ func fillExcel() {
 							}
 						}
 					}
-					if iqiyiStartIndex < 0 {
-						panic("爱奇异趋势图的当前日期不存在")
-					}
 				}
 				if rowIndex == 12 {
-					cells := row.Cells
-					style := cells[iqiyiStartIndex].GetStyle()
-					style.Font.Size = 9
-					cells[iqiyiStartIndex].Value = dataSeq["iqiyi"].playTimes
-
+					if iqiyiStartIndex < 0 {
+						fmt.Println("[Warn]爱奇异趋势图的当前日期不存在")
+					} else {
+						cells := row.Cells
+						style := cells[iqiyiStartIndex].GetStyle()
+						style.Font.Size = 9
+						cells[iqiyiStartIndex].Value = dataSeq["iqiyi"].playTimes
+					}
 				}
 			}
 		}
