@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,7 +35,7 @@ const (
 
 	iqiyiScore     string = "http://pcw-api.iqiyi.com/video/score/getsnsscore?qipu_ids=230419701&tvid=230419701&pageNo=1"
 	iqiyiPlayTimes string = "https://pcw-api.iqiyi.com/video/video/hotplaytimes/230419701"
-	iqiyiRank string = "http://top.iqiyi.com/shaoer.html"
+	iqiyiRank      string = "http://top.iqiyi.com/shaoer.html"
 
 	tencentScore string = "https://v.qq.com/x/cover/to61xna5r970zmo/e0027wpnpye.html"
 	tencentRank  string = "https://v.qq.com/x/hotlist/search/?channel=106"
@@ -70,6 +71,7 @@ func GetBetweenStr(str, start, end string) string {
 }
 
 var dataSeq = make(map[string]Collector)
+var wg sync.WaitGroup
 
 func init() {
 	flag.BoolVar(&h, "h", false, "this help")
@@ -94,14 +96,12 @@ func main() {
 		return
 	}
 
-	mgtv := getMGTVData()
-	iqiyi := getIQiyiData()
-	tencent := getTencentData()
-	pptv := getPPTVData()
-	dataSeq["mgtv"] = *mgtv
-	dataSeq["iqiyi"] = *iqiyi
-	dataSeq["tencent"] = *tencent
-	dataSeq["pptv"] = *pptv
+	wg.Add(4)
+	go getMGTVData()
+	go getIQiyiData()
+	go getTencentData()
+	go getPPTVData()
+	wg.Wait()
 
 	fillExcel()
 }
@@ -273,10 +273,11 @@ type MgtvPlaySerialDataElement struct {
 	Count string `json:"playcnt"`
 }
 
-func getPPTVData() *Collector {
+func getPPTVData() {
 	c := new(Collector)
 
 	c.platform = "pptv"
+	defer wg.Done()
 	//获取排名
 	doc, err := goquery.NewDocument(pptvRank)
 	doc.Find("body").Find("ul.cf").Find("li").Each(func(i int, selection *goquery.Selection) {
@@ -299,7 +300,6 @@ func getPPTVData() *Collector {
 	reg, _ := regexp.Compile(pat)
 	span := reg.Find(body)
 	c.score = GetBetweenStr(string(span), ">", "<")
-	fmt.Println("Get PPTV Score: " + c.score)
 
 	//获取播放
 	pat = "<li>播放：[0-9]+\\.?[0-9]*万"
@@ -334,13 +334,14 @@ func getPPTVData() *Collector {
 		}
 	}
 
-	return c
+	dataSeq["pptv"] = *c
 }
 
-func getTencentData() *Collector {
+func getTencentData() {
 	c := new(Collector)
 
 	c.platform = "tencent"
+	defer wg.Done()
 	//获取评分
 	resp, _ := http.Get(tencentScore)
 	defer resp.Body.Close()
@@ -349,7 +350,6 @@ func getTencentData() *Collector {
 	reg, _ := regexp.Compile(pat)
 	span := reg.Find(body)
 	c.score = strings.Split(string(span), "\":\"")[1]
-	fmt.Println("Get Tencent Score: " + c.score)
 
 	//获取排名
 	doc, err := goquery.NewDocument(tencentRank)
@@ -372,25 +372,29 @@ func getTencentData() *Collector {
 	}
 	tmpInt := tmpFloat * 10000
 	c.playTimes = strconv.Itoa(int(tmpInt))
-	fmt.Println("Get Tencent PlayTimes: " + c.playTimes)
 
-	return c
+	dataSeq["tencent"] = *c
+
 }
 
-func getMGTVData() *Collector {
+func getMGTVData() {
 	c := new(Collector)
 
 	c.platform = "mgtv"
+	defer wg.Done()
 
 	//获取评分
 	resp, _ := http.Get(mgtvScore)
+	if resp == nil {
+		fmt.Printf("获取 %s 数据失败, 请检查%s 链接是否可以用\n", c.platform, mgtvScore)
+		return
+	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	pat := "<span class=\"score\">[0-9]+\\.?[0-9]*</span>"
 	reg, _ := regexp.Compile(pat)
 	span := reg.Find(body)
 	c.score = GetBetweenStr(string(span), ">", "<")
-	fmt.Println("Get MGTV Score: " + c.score)
 
 	//获取排名
 	second := time.Now().Unix()
@@ -401,7 +405,6 @@ func getMGTVData() *Collector {
 		fmt.Println("================mgtvRankData json str 转struct==")
 		fmt.Println(err)
 	}
-	fmt.Printf("Get MGTV rank data, length: %d \n", len(mgtvRankData.Data))
 	for _, data := range mgtvRankData.Data {
 		if strings.Contains(data.Name, cartoonName) {
 			c.rank = string(data.VideoIndex)
@@ -444,7 +447,7 @@ func getMGTVData() *Collector {
 		}
 	}
 
-	return c
+	dataSeq["mgtv"] = *c
 }
 
 type IQiyiScore struct {
@@ -464,9 +467,10 @@ type IQiyiPlayTimesData struct {
 	Hot int `json:"hot"`
 }
 
-func getIQiyiData() *Collector {
+func getIQiyiData() {
 	c := new(Collector)
 	c.platform = "iqiyi"
+	defer wg.Done()
 
 	//获取排名
 	doc, err := goquery.NewDocument(iqiyiRank)
@@ -482,6 +486,10 @@ func getIQiyiData() *Collector {
 	})
 	//获取评分
 	resp, _ := http.Get(iqiyiScore)
+	if resp == nil {
+		fmt.Printf("获取 %s 数据失败, 请检查%s 链接是否可以用\n", c.platform, iqiyiScore)
+		return
+	}
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	var iqiyiScore IQiyiScore
@@ -501,5 +509,6 @@ func getIQiyiData() *Collector {
 	}
 	c.playTimes = strconv.Itoa(iqiyiPlayTimes.Data[0].Hot)
 
-	return c
+	dataSeq["iqiyi"] = *c
+
 }
