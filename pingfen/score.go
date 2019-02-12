@@ -279,7 +279,8 @@ func getPPTVData() {
 	c.platform = "pptv"
 	defer wg.Done()
 	//获取排名
-	doc, err := goquery.NewDocument(pptvRank)
+	resp := getNetworkResp(pptvRank)
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	doc.Find("body").Find("ul.cf").Find("li").Each(func(i int, selection *goquery.Selection) {
 		s := selection.Find("a[title=\"宇宙护卫队\"]")
 		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
@@ -293,7 +294,7 @@ func getPPTVData() {
 	})
 
 	//获取评分
-	resp := getNetworkResp(pptvScore)
+	resp = getNetworkResp(pptvScore)
 	body, _ := ioutil.ReadAll(resp.Body)
 	pat := "<b class=\"score\">[0-9]+\\.?[0-9]*</b>"
 	reg, _ := regexp.Compile(pat)
@@ -360,7 +361,8 @@ func getTencentData() {
 	c.score = strings.Split(string(span), "\":\"")[1]
 
 	//获取排名
-	doc, err := goquery.NewDocument(tencentRank)
+	resp = getNetworkResp(tencentRank)
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	doc.Find("body").Find("ul.table_list._cont").Find("li").Each(func(i int, selection *goquery.Selection) {
 		s := selection.Find("a[title=\"宇宙护卫队\"]")
 		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
