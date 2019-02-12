@@ -477,7 +477,11 @@ func getIQiyiData() {
 	defer wg.Done()
 
 	//获取排名
-	doc, err := goquery.NewDocument(iqiyiRank)
+	resp := getNetworkResp(iqiyiRank)
+	doc, err :=	goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		fmt.Println("获取")
+	}
 	doc.Find("body").Find("ul.topDetails-list").Find("li").Each(func(i int, selection *goquery.Selection) {
 		s := selection.Find("a[title=\"宇宙护卫队\"]")
 		if s != nil && strings.TrimSpace(s.Text()) == "宇宙护卫队" {
@@ -489,7 +493,7 @@ func getIQiyiData() {
 		}
 	})
 	//获取评分
-	resp := getNetworkResp(iqiyiScore)
+	resp = getNetworkResp(iqiyiScore)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	var iqiyiScore IQiyiScore
