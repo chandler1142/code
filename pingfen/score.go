@@ -293,8 +293,7 @@ func getPPTVData() {
 	})
 
 	//获取评分
-	resp, _ := http.Get(pptvScore)
-	defer resp.Body.Close()
+	resp := getNetworkResp(pptvScore)
 	body, _ := ioutil.ReadAll(resp.Body)
 	pat := "<b class=\"score\">[0-9]+\\.?[0-9]*</b>"
 	reg, _ := regexp.Compile(pat)
@@ -308,7 +307,7 @@ func getPPTVData() {
 	tmp := GetBetweenStr(string(span), "<li>播放：", "万")
 	c.playTimes = strings.Split(tmp, "：")[1]
 
-	resp, _ = http.Get(pptvPlayTimesBySeries)
+	resp = getNetworkResp(pptvPlayTimesBySeries)
 	body, _ = ioutil.ReadAll(resp.Body)
 	jsonStr := GetBetweenStr(string(body), "var webcfg =", "\n")
 	jsonStr = GetBetweenStr(jsonStr, "=", ";")
@@ -337,13 +336,22 @@ func getPPTVData() {
 	dataSeq["pptv"] = *c
 }
 
+func getNetworkResp(url string) *http.Response {
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println("获取网络数据失败，请检查网络是否连接正常")
+		panic(err)
+	}
+	return resp
+}
+
 func getTencentData() {
 	c := new(Collector)
 
 	c.platform = "tencent"
 	defer wg.Done()
 	//获取评分
-	resp, _ := http.Get(tencentScore)
+	resp := getNetworkResp(tencentScore)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	pat := "\"score\":\"[0-9]+\\.?[0-9]*"
@@ -384,11 +392,7 @@ func getMGTVData() {
 	defer wg.Done()
 
 	//获取评分
-	resp, _ := http.Get(mgtvScore)
-	if resp == nil {
-		fmt.Printf("获取 %s 数据失败, 请检查%s 链接是否可以用\n", c.platform, mgtvScore)
-		return
-	}
+	resp := getNetworkResp(mgtvScore)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	pat := "<span class=\"score\">[0-9]+\\.?[0-9]*</span>"
@@ -398,7 +402,7 @@ func getMGTVData() {
 
 	//获取排名
 	second := time.Now().Unix()
-	resp, _ = http.Get(fmt.Sprintf(mgtvRank, strconv.FormatInt(second, 10)))
+	resp = getNetworkResp(fmt.Sprintf(mgtvRank, strconv.FormatInt(second, 10)))
 	body, _ = ioutil.ReadAll(resp.Body)
 	var mgtvRankData MgtvRankData
 	if err := json.Unmarshal(body, &mgtvRankData); err != nil {
@@ -416,7 +420,7 @@ func getMGTVData() {
 	}
 
 	//获取播放次数
-	resp, _ = http.Get(fmt.Sprintf(mgtvPlayTimes, strconv.FormatInt(second, 10)))
+	resp = getNetworkResp(fmt.Sprintf(mgtvPlayTimes, strconv.FormatInt(second, 10)))
 	body, _ = ioutil.ReadAll(resp.Body)
 	var mgtvPlayTimes MgtvPlayTimes
 	if err := json.Unmarshal(body, &mgtvPlayTimes); err != nil {
@@ -434,7 +438,7 @@ func getMGTVData() {
 	c.seriesTimes = make(map[string]string)
 	//一共三页
 	for i := 1; i <= 3; i++ {
-		resp, _ = http.Get(fmt.Sprintf(mgtvPlayTimesBySeries, i, second))
+		resp = getNetworkResp(fmt.Sprintf(mgtvPlayTimesBySeries, i, second))
 		body, _ = ioutil.ReadAll(resp.Body)
 		var mgtvPlaySerial MgtvPlaySerial
 		if err := json.Unmarshal(body, &mgtvPlaySerial); err != nil {
@@ -485,11 +489,7 @@ func getIQiyiData() {
 		}
 	})
 	//获取评分
-	resp, _ := http.Get(iqiyiScore)
-	if resp == nil {
-		fmt.Printf("获取 %s 数据失败, 请检查%s 链接是否可以用\n", c.platform, iqiyiScore)
-		return
-	}
+	resp := getNetworkResp(iqiyiScore)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 	var iqiyiScore IQiyiScore
@@ -500,7 +500,7 @@ func getIQiyiData() {
 	c.score = strconv.FormatFloat(iqiyiScore.Data[0].Score, 'f', 1, 64)
 
 	//获取热度
-	resp, _ = http.Get(iqiyiPlayTimes)
+	resp = getNetworkResp(iqiyiPlayTimes)
 	body, _ = ioutil.ReadAll(resp.Body)
 	var iqiyiPlayTimes IQiyiPlayTimes
 	if err := json.Unmarshal(body, &iqiyiPlayTimes); err != nil {
@@ -510,5 +510,4 @@ func getIQiyiData() {
 	c.playTimes = strconv.Itoa(iqiyiPlayTimes.Data[0].Hot)
 
 	dataSeq["iqiyi"] = *c
-
 }

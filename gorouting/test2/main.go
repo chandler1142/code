@@ -35,7 +35,7 @@ func player(name string, court chan int) {
 			return
 		}
 
-		n := rand.Intn(100)s
+		n := rand.Intn(100)
 		if n%13 == 0 {
 			fmt.Printf("Player %s Missed\n", name)
 			close(court)
