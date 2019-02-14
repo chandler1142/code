@@ -96,14 +96,28 @@ func main() {
 		return
 	}
 
-	wg.Add(4)
-	getMGTVData()
-	getIQiyiData()
-	getTencentData()
-	getPPTVData()
-	wg.Wait()
-
+	startFetchData()
 	fillExcel()
+}
+
+var completeChan = make(chan Collector)
+
+func startFetchData() {
+	go getMGTVData()
+	go getIQiyiData()
+	go getTencentData()
+	go getPPTVData()
+
+	for {
+		select {
+		case collector := <-completeChan:
+			fmt.Printf("收到%s数据... \n", collector.platform)
+			dataSeq[collector.platform] = collector
+			if len(dataSeq) == 4 {
+				return
+			}
+		}
+	}
 }
 
 func fillSheetOneData(platform string, row *xlsx.Row, startIndex int) {
@@ -128,7 +142,7 @@ func fillSheetsData(platform string, sheet *xlsx.Sheet) {
 		if rowIndex == 1 {
 			startIndex = getStartIndexByMatchDate(row)
 			if startIndex < 0 {
-				fmt.Printf("[WARN]请检查sheet: %s 当日的日期单元格是否存在 \n" , sheet.Name)
+				fmt.Printf("[WARN]请检查sheet: %s 当日的日期单元格是否存在 \n", sheet.Name)
 			}
 		} else if rowIndex > 1 && startIndex > 0 {
 			//第一列的值正好是第几集，1，2，3
@@ -273,11 +287,10 @@ type MgtvPlaySerialDataElement struct {
 	Count string `json:"playcnt"`
 }
 
-func getPPTVData() {
+func getPPTVData() *Collector {
 	c := new(Collector)
 
 	c.platform = "pptv"
-	defer wg.Done()
 	//获取排名
 	resp := getNetworkResp(pptvRank)
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
@@ -334,7 +347,8 @@ func getPPTVData() {
 		}
 	}
 
-	dataSeq["pptv"] = *c
+	completeChan <- *c
+	return c
 }
 
 func getNetworkResp(url string) *http.Response {
@@ -346,11 +360,10 @@ func getNetworkResp(url string) *http.Response {
 	return resp
 }
 
-func getTencentData() {
+func getTencentData() *Collector {
 	c := new(Collector)
 
 	c.platform = "tencent"
-	defer wg.Done()
 	//获取评分
 	resp := getNetworkResp(tencentScore)
 	defer resp.Body.Close()
@@ -383,15 +396,14 @@ func getTencentData() {
 	tmpInt := tmpFloat * 10000
 	c.playTimes = strconv.Itoa(int(tmpInt))
 
-	dataSeq["tencent"] = *c
-
+	completeChan <- *c
+	return c
 }
 
-func getMGTVData() {
+func getMGTVData() *Collector {
 	c := new(Collector)
 
 	c.platform = "mgtv"
-	defer wg.Done()
 
 	//获取评分
 	resp := getNetworkResp(mgtvScore)
@@ -453,7 +465,8 @@ func getMGTVData() {
 		}
 	}
 
-	dataSeq["mgtv"] = *c
+	completeChan <- *c
+	return c
 }
 
 type IQiyiScore struct {
@@ -473,14 +486,13 @@ type IQiyiPlayTimesData struct {
 	Hot int `json:"hot"`
 }
 
-func getIQiyiData() {
+func getIQiyiData() *Collector {
 	c := new(Collector)
 	c.platform = "iqiyi"
-	defer wg.Done()
 
 	//获取排名
 	resp := getNetworkResp(iqiyiRank)
-	doc, err :=	goquery.NewDocumentFromReader(resp.Body)
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		fmt.Println("获取")
 	}
@@ -515,5 +527,6 @@ func getIQiyiData() {
 	}
 	c.playTimes = strconv.Itoa(iqiyiPlayTimes.Data[0].Hot)
 
-	dataSeq["iqiyi"] = *c
+	completeChan <- *c
+	return c
 }
