@@ -20,5 +20,5 @@ func main() {
 	a.Name = "Bill"
 	a.Email = "bill@email.com"
 
-	fmt.Printf("User: %v\n", a)
+	fmt.Printf("user: %v\n", a)
 }

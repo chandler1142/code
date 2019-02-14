@@ -14,7 +14,7 @@ type user struct {
 
 // notify implements a method with a value receiver.
 func (u user) notify() {
-	fmt.Printf("Sending User Email To %s<%s>\n",
+	fmt.Printf("Sending user Email To %s<%s>\n",
 		u.name,
 		u.email)
 }

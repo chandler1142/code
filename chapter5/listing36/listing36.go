@@ -26,7 +26,7 @@ func (u *user) notify() {
 
 // main is the entry point for the application.
 func main() {
-	// Create a value of type User and send a notification.
+	// Create a value of type user and send a notification.
 	u := user{"Bill", "bill@email.com"}
 
 	sendNotification(u)

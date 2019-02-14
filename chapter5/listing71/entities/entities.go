@@ -2,7 +2,7 @@
 // people in the system.
 package entities
 
-// User defines a user in the program.
+// user defines a user in the program.
 type User struct {
 	Name  string
 	email string

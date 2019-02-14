@@ -97,10 +97,10 @@ func main() {
 	}
 
 	wg.Add(4)
-	go getMGTVData()
-	go getIQiyiData()
-	go getTencentData()
-	go getPPTVData()
+	getMGTVData()
+	getIQiyiData()
+	getTencentData()
+	getPPTVData()
 	wg.Wait()
 
 	fillExcel()
@@ -108,7 +108,7 @@ func main() {
 
 func fillSheetOneData(platform string, row *xlsx.Row, startIndex int) {
 	if startIndex < 0 {
-		panic("Please check current date column exists in sheet one")
+		panic("请检查sheet1当日日期单元格是否存在")
 	}
 	cells := row.Cells
 	fmt.Printf("%s data as below: \n times: %s \n score: %s \n rank: %s\n serial: %s\n", platform, dataSeq[platform].playTimes, dataSeq[platform].score, dataSeq[platform].rank, dataSeq[platform].seriesTimes)
@@ -128,7 +128,7 @@ func fillSheetsData(platform string, sheet *xlsx.Sheet) {
 		if rowIndex == 1 {
 			startIndex = getStartIndexByMatchDate(row)
 			if startIndex < 0 {
-				fmt.Println("[WARN]Please check current date column exists in sheet two: " + platform)
+				fmt.Printf("[WARN]请检查sheet: %s 当日的日期单元格是否存在 \n" , sheet.Name)
 			}
 		} else if rowIndex > 1 && startIndex > 0 {
 			//第一列的值正好是第几集，1，2，3
