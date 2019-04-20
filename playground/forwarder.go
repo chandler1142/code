@@ -27,7 +27,7 @@ func forward(conn net.Conn) {
 
 func main() {
 	if len(os.Args) != 3 {
-		log.Fatalf("Usage %s listen:port forward:port\n", os.Args[0]);
+		log.Fatalf("Usage %s listen:port forward:port\n", os.Args[0])
 		return
 	}
 

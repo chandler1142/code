@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
+	"strconv"
 )
 
 func main() {
@@ -31,6 +33,8 @@ func main() {
 	}
 
 	done <- 1
+
+	fmt.Println("goroutine nums: " + strconv.Itoa(runtime.NumGoroutine()))
 
 
 }
