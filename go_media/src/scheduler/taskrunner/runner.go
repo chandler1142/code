@@ -1,5 +1,7 @@
 package taskrunner
 
+import "log"
+
 type Runner struct {
 	Controller controlChan
 	Error      controlChan
@@ -34,6 +36,7 @@ func (r *Runner) startDispatch() {
 	for {
 		select {
 		case c := <-r.Controller:
+			log.Printf("select ...")
 			if c == READY_TO_DISPATCH {
 				err := r.Dispatcher(r.Data)
 				if err != nil {
