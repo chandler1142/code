@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/julienschmidt/httprouter"
+	config2 "media/config"
 	"net/http"
 )
 
@@ -39,6 +40,8 @@ func RegisterHanlders() *httprouter.Router {
 }
 
 func main() {
+	config := config2.ConfigStruct{}
+	config.Name = "123"
 	router := RegisterHanlders()
 	mw := NewMiddleWareHandler(router, 2)
 	http.ListenAndServe(":9000", mw)
