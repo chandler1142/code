@@ -1,12 +1,18 @@
 package config
 
 import (
+	"fmt"
 	"github.com/baidu/openedge/logger"
 	cfg "gopkg.in/gcfg.v1"
 )
 
+func init() {
+	fmt.Println("init common config")
+}
+
 var (
 	defaultUpdateInterval uint = 600
+	Conf                  Config
 )
 
 type InterfaceDefinition struct {
@@ -20,13 +26,9 @@ type Config struct {
 	Interface map[string]*InterfaceDefinition
 }
 
-func NewConfig(path string) (*Config, error) {
-	var c Config
-	c.Global.Update_Interval_Seconds = defaultUpdateInterval
-	if err := cfg.ReadFileInto(&c, path); err != nil {
+func NewConfig(path string) {
+	Conf.Global.Update_Interval_Seconds = defaultUpdateInterval
+	if err := cfg.ReadFileInto(&Conf, path); err != nil {
 		logger.Warnf("Reading config path fail %v", err)
-		return nil, err
 	}
-
-	return &c, nil
 }

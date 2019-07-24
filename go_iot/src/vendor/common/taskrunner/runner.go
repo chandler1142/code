@@ -1,6 +1,8 @@
 package taskrunner
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Runner struct {
 	Name       string

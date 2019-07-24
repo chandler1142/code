@@ -19,6 +19,7 @@ var (
 )
 
 func init() {
+	fmt.Println("init main")
 	flag.Parse()
 	if *cfgFile == "" {
 		log.Fatal("Configuration file must be specified")
@@ -28,12 +29,9 @@ func init() {
 func main() {
 	fmt.Println("Go IOT monitor start...")
 
-	cfg, err := config.NewConfig(*cfgFile)
-	if err != nil {
-		log.Fatal(err)
-	}
+	config.NewConfig(*cfgFile)
 
-	net_monitor.StartNewMonitor(cfg)
+	net_monitor.StartNewMonitor()
 
 	sch := make(chan os.Signal)
 	signal.Notify(sch, os.Interrupt, os.Kill)

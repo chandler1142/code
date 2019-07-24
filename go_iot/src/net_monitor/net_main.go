@@ -6,9 +6,9 @@ import (
 	"fmt"
 )
 
-func StartNewMonitor(cfg *config.Config) {
+func StartNewMonitor() {
 	//1. read conf file and init the monitor map
-	if len(cfg.Interface) == 0 {
+	if len(config.Conf.Interface) == 0 {
 		fmt.Println("No interfaces specified")
 		return
 	}
@@ -17,4 +17,5 @@ func StartNewMonitor(cfg *config.Config) {
 	r := taskrunner.NewRunner("NetInterfaceMonitor", 3, true, Dispatch, Execute)
 	w := taskrunner.NewWorker(5, r)
 	go w.StartWorker()
+
 }
