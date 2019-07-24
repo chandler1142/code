@@ -1,14 +1,16 @@
 package net_monitor
 
 import (
+	"common/config"
 	"common/taskrunner"
 	"fmt"
 	"github.com/shirou/gopsutil/net"
+	"sync"
 )
 
-func init()  {
-	fmt.Println("init net main")
-}
+var (
+	ifaceMap = make(map[string]*Iface)
+)
 
 func Dispatch(dc taskrunner.DataChan) error {
 
@@ -18,9 +20,31 @@ func Dispatch(dc taskrunner.DataChan) error {
 	}
 
 	for _, ioCounterStat := range ioCounterStats {
-		fmt.Println(ioCounterStat)
-	}
+		if config.Conf.Interface[ioCounterStat.Name] != nil {
+			fmt.Println(ioCounterStat)
+			if _,ok := ifaceMap[ioCounterStat.Name]; !ok {
+				iface := &Iface{
+					name: ioCounterStat.Name,
+					ip: config.Conf.Interface[ioCounterStat.Name].IP,
+					lastSend: ioCounterStat.BytesSent,
+					lastRecv: ioCounterStat.BytesRecv,
+					mtx: &sync.Mutex{},
+				}
+				ifaceMap[ioCounterStat.Name] = iface
+			} else {
+				iface := ifaceMap[ioCounterStat.Name]
+				received := ioCounterStat.BytesRecv - iface.lastRecv
+				send := ioCounterStat.BytesSent - iface.lastSend
+				iface.lastRecv = ioCounterStat.BytesRecv
+				iface.lastSend = ioCounterStat.BytesSent
+				fmt.Printf("received: %d, send: %d \n", received, send)
 
+				fmt.Printf("received rate: %.2f kb/s, send rate: %.2f kb/s \n ", float64(received/1024/5), float64(send/1024/5))
+			}
+		}
+
+	}
+	fmt.Println("==============================================")
 
 	//Get interface name and ip by this API
 	//stats, err := net.Interfaces()
