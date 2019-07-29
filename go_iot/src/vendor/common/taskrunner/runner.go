@@ -12,10 +12,10 @@ type Runner struct {
 	dataSize   int
 	longlived  bool
 	Dispatcher Fn
-	Executor   Fn
+	Executor   Consumer
 }
 
-func NewRunner(name string, size int, longlived bool, d Fn, e Fn) *Runner {
+func NewRunner(name string, size int, longlived bool, d Fn, e Consumer) *Runner {
 	return &Runner{
 		Name:       name,
 		Controller: make(chan string, 1),
@@ -26,6 +26,10 @@ func NewRunner(name string, size int, longlived bool, d Fn, e Fn) *Runner {
 		Dispatcher: d,
 		Executor:   e,
 	}
+}
+
+func (r *Runner) startExecutor(record interface{}) {
+	r.Executor(record)
 }
 
 func (r *Runner) startDispatch() {
@@ -41,9 +45,5 @@ func (r *Runner) startDispatch() {
 	if err != nil {
 		fmt.Printf("%s Error occur when dispatch data \n", r.Name)
 	}
-}
 
-func (r *Runner) startAll() {
-	r.Controller <- READY_TO_DISPATCH
-	r.startDispatch()
 }

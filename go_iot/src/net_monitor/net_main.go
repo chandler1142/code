@@ -4,6 +4,7 @@ import (
 	"common/config"
 	"common/taskrunner"
 	"fmt"
+	"time"
 )
 
 func StartNewMonitor() {
@@ -14,8 +15,8 @@ func StartNewMonitor() {
 	}
 
 	//2. init the task runner and start the goroutine worker
-	r := taskrunner.NewRunner("NetInterfaceMonitor", 3, true, Dispatch, Execute)
-	w := taskrunner.NewWorker(5, r)
-	go w.StartWorker()
-
+	r := taskrunner.NewRunner("NetInterfaceMonitor", 64, true, Dispatch, Execute)
+	w := taskrunner.NewWorker(time.Duration(config.Conf.Global.Net_Update_Interval_Seconds), r)
+	go w.StartDispatch()
+	go w.StartExecutor()
 }

@@ -1,6 +1,8 @@
 package taskrunner
 
-import "time"
+import (
+	"time"
+)
 
 type Worker struct {
 	ticker *time.Ticker
@@ -14,11 +16,20 @@ func NewWorker(interval time.Duration, r *Runner) *Worker {
 	}
 }
 
-func (w *Worker) StartWorker() {
+func (w *Worker) StartDispatch() {
 	for {
 		select {
 		case <-w.ticker.C:
-			go w.runner.startDispatch()
+			w.runner.startDispatch()
+		}
+	}
+}
+
+func (w *Worker) StartExecutor() {
+	for {
+		select {
+		case record := <-w.runner.Data:
+			w.runner.startExecutor(record)
 		}
 	}
 }

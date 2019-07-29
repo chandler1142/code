@@ -27,7 +27,7 @@ func TestRunner(t *testing.T) {
 	}
 
 	runner := NewRunner(30, false, d, e)
-	go runner.startAll()
+	//go runner.startAll()
 	time.Sleep(3 * time.Second)
 
 }

@@ -2,10 +2,13 @@ package net_monitor
 
 import (
 	"common/config"
+	"common/dbops"
 	"common/taskrunner"
 	"fmt"
 	"github.com/shirou/gopsutil/net"
+	"strconv"
 	"sync"
+	"time"
 )
 
 var (
@@ -21,14 +24,14 @@ func Dispatch(dc taskrunner.DataChan) error {
 
 	for _, ioCounterStat := range ioCounterStats {
 		if config.Conf.Interface[ioCounterStat.Name] != nil {
-			fmt.Println(ioCounterStat)
-			if _,ok := ifaceMap[ioCounterStat.Name]; !ok {
+			if _, ok := ifaceMap[ioCounterStat.Name]; !ok {
+
 				iface := &Iface{
-					name: ioCounterStat.Name,
-					ip: config.Conf.Interface[ioCounterStat.Name].IP,
+					name:     ioCounterStat.Name,
+					ip:       config.Conf.Interface[ioCounterStat.Name].IP,
 					lastSend: ioCounterStat.BytesSent,
 					lastRecv: ioCounterStat.BytesRecv,
-					mtx: &sync.Mutex{},
+					mtx:      &sync.Mutex{},
 				}
 				ifaceMap[ioCounterStat.Name] = iface
 			} else {
@@ -37,30 +40,49 @@ func Dispatch(dc taskrunner.DataChan) error {
 				send := ioCounterStat.BytesSent - iface.lastSend
 				iface.lastRecv = ioCounterStat.BytesRecv
 				iface.lastSend = ioCounterStat.BytesSent
-				fmt.Printf("received: %d, send: %d \n", received, send)
 
-				fmt.Printf("received rate: %.2f kb/s, send rate: %.2f kb/s \n ", float64(received/1024/5), float64(send/1024/5))
+				t := time.Now()
+				//ctime := t.Format("Jan 02 2006, 15:04:05")
+
+				recvRecord := new(dbops.MonitorRecord)
+				recvRecord.Type = "net_recv"
+				recvFloatValue := float64(received / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
+				recvRecord.Value = strconv.FormatFloat(recvFloatValue, 'f', 6, 64)
+				recvRecord.IP = iface.ip
+				recvRecord.CreateTime = t
+
+				if recvFloatValue > 0 {
+					dc <- recvRecord
+				}
+
+				sendRecord := new(dbops.MonitorRecord)
+				sendRecord.Type = "net_send"
+				sendFloatValue := float64(send / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
+				sendRecord.Value = strconv.FormatFloat(sendFloatValue, 'f', 6, 64)
+				sendRecord.IP = iface.ip
+				sendRecord.CreateTime = t
+
+				if sendFloatValue > 0 {
+					dc <- sendRecord
+				}
+
 			}
 		}
-
 	}
-	fmt.Println("==============================================")
-
-	//Get interface name and ip by this API
-	//stats, err := net.Interfaces()
-	//if err != nil {
-	//	fmt.Printf("Get interface stats er: %v \n", err)
-	//	return err
-	//}
-	//log.Println("Start to collect interfaces info...")
-	//for _, stat := range stats {
-	//	log.Println(stat)
-	//}
 
 	return nil
 }
 
-func Execute(dc taskrunner.DataChan) error {
-	fmt.Println("Execute...")
+func Execute(record interface{}) error {
+	r := record.(*dbops.MonitorRecord)
+	displayTime := r.CreateTime.Format("2006-01-02, 15:04:05")
+
+	fmt.Printf("Consume record:\n ip: %s, type: %s, value: %s, time: %s, properties: %s \n", r.IP, r.Type, r.Value, displayTime, r.Properties)
+	err := dbops.InsertMonitorRecord(r)
+
+	if err != nil {
+		println("Net Execute record fail", err)
+		return err
+	}
 	return nil
 }

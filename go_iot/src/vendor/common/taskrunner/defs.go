@@ -11,3 +11,5 @@ type ControlChan chan string
 type DataChan chan interface{}
 
 type Fn func(dc DataChan) error
+
+type Consumer func(record interface{}) error
