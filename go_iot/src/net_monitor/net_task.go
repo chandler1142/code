@@ -61,7 +61,7 @@ func Dispatch(dc taskrunner.DataChan) error {
 					recvRecord.IP = iface.ip
 					recvRecord.CreateTime = t
 
-					if recvFloatValue > 0 {
+					if recvFloatValue > float64(config.Conf.Global.Net_Update_Threshold) {
 						dc <- recvRecord
 					}
 				}
@@ -74,7 +74,7 @@ func Dispatch(dc taskrunner.DataChan) error {
 					sendRecord.IP = iface.ip
 					sendRecord.CreateTime = t
 
-					if sendFloatValue > 0 {
+					if sendFloatValue > float64(config.Conf.Global.Net_Update_Threshold) {
 						dc <- sendRecord
 					}
 				}
