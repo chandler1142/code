@@ -19,7 +19,6 @@ var (
 )
 
 func init() {
-	fmt.Println("init main")
 	flag.Parse()
 	if *cfgFile == "" {
 		log.Fatal("Configuration file must be specified")
@@ -37,3 +36,5 @@ func main() {
 	signal.Notify(sch, os.Interrupt, os.Kill)
 	<-sch
 }
+
+

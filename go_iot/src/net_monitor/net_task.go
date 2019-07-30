@@ -36,36 +36,48 @@ func Dispatch(dc taskrunner.DataChan) error {
 				ifaceMap[ioCounterStat.Name] = iface
 			} else {
 				iface := ifaceMap[ioCounterStat.Name]
+
+				//fmt.Printf(" iocounter.byterecv %d lastRecv %d iocounterstat %d lastSend %d \n", ioCounterStat.BytesRecv, iface.lastRecv, ioCounterStat.BytesSent, iface.lastSend)
+				if ioCounterStat.BytesRecv < iface.lastRecv {
+					iface.lastRecv = 0
+				}
+				if ioCounterStat.BytesSent < iface.lastSend {
+					iface.lastSend = 0
+				}
 				received := ioCounterStat.BytesRecv - iface.lastRecv
 				send := ioCounterStat.BytesSent - iface.lastSend
+
 				iface.lastRecv = ioCounterStat.BytesRecv
 				iface.lastSend = ioCounterStat.BytesSent
 
 				t := time.Now()
 				//ctime := t.Format("Jan 02 2006, 15:04:05")
 
-				recvRecord := new(dbops.MonitorRecord)
-				recvRecord.Type = "net_recv"
-				recvFloatValue := float64(received / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
-				recvRecord.Value = strconv.FormatFloat(recvFloatValue, 'f', 6, 64)
-				recvRecord.IP = iface.ip
-				recvRecord.CreateTime = t
+				if received > 0 {
+					recvRecord := new(dbops.MonitorRecord)
+					recvRecord.Type = "net_recv"
+					recvFloatValue := float64(received / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
+					recvRecord.Value = strconv.FormatFloat(recvFloatValue, 'f', 6, 64)
+					recvRecord.IP = iface.ip
+					recvRecord.CreateTime = t
 
-				if recvFloatValue > 0 {
-					dc <- recvRecord
+					if recvFloatValue > 0 {
+						dc <- recvRecord
+					}
 				}
 
-				sendRecord := new(dbops.MonitorRecord)
-				sendRecord.Type = "net_send"
-				sendFloatValue := float64(send / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
-				sendRecord.Value = strconv.FormatFloat(sendFloatValue, 'f', 6, 64)
-				sendRecord.IP = iface.ip
-				sendRecord.CreateTime = t
+				if send > 0 {
+					sendRecord := new(dbops.MonitorRecord)
+					sendRecord.Type = "net_send"
+					sendFloatValue := float64(send / 1024 / uint64(config.Conf.Global.Net_Update_Interval_Seconds))
+					sendRecord.Value = strconv.FormatFloat(sendFloatValue, 'f', 6, 64)
+					sendRecord.IP = iface.ip
+					sendRecord.CreateTime = t
 
-				if sendFloatValue > 0 {
-					dc <- sendRecord
+					if sendFloatValue > 0 {
+						dc <- sendRecord
+					}
 				}
-
 			}
 		}
 	}
@@ -77,7 +89,7 @@ func Execute(record interface{}) error {
 	r := record.(*dbops.MonitorRecord)
 	displayTime := r.CreateTime.Format("2006-01-02, 15:04:05")
 
-	fmt.Printf("Consume record:\n ip: %s, type: %s, value: %s, time: %s, properties: %s \n", r.IP, r.Type, r.Value, displayTime, r.Properties)
+	fmt.Printf("Consume record: ip: %s, type: %s, value: %s, time: %s, properties: %s \n", r.IP, r.Type, r.Value, displayTime, r.Properties)
 	err := dbops.InsertMonitorRecord(r)
 
 	if err != nil {
