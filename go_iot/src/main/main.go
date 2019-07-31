@@ -2,10 +2,10 @@ package main
 
 import (
 	"common/config"
+	"disk_monitor"
 	"flag"
 	"fmt"
 	"log"
-	"net_monitor"
 	"os"
 	"os/signal"
 )
@@ -30,7 +30,8 @@ func main() {
 
 	config.NewConfig(*cfgFile)
 
-	net_monitor.StartNewMonitor()
+	//net_monitor.StartNewMonitor()
+	disk_monitor.StartDiskMonitor()
 
 	sch := make(chan os.Signal)
 	signal.Notify(sch, os.Interrupt, os.Kill)

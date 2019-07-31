@@ -19,6 +19,8 @@ type Config struct {
 	Global struct {
 		Net_Update_Interval_Seconds uint
 		Net_Update_Threshold uint
+		Disk_Update_Interval_Seconds uint
+		IP string
 	}
 	Interface map[string]*InterfaceDefinition
 }
